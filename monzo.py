@@ -42,6 +42,7 @@ def fetch_transactions(access_token: str, account_id: str, since_iso: str) -> Li
     response.raise_for_status()
     data: Dict = response.json()
     txns = data.get("transactions", [])
-    return [t for t in txns if not t.get("declined")]
+    # Only include finalized (settled) and not-declined transactions
+    return [t for t in txns if not t.get("declined") and t.get("settled")]
 
 

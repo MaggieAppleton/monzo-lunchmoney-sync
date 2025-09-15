@@ -24,6 +24,15 @@ def read_last_sync() -> Dict[str, str]:
 
 
 def get_since_for_account(account_id: str) -> str:
+    # Optional override to force a backfill window for this run only
+    override_days = (os.getenv("LM_OVERRIDE_SINCE_DAYS", "").strip() or None)
+    if override_days is not None:
+        try:
+            days = int(override_days)
+            if days > 0:
+                return _default_since_days_ago(days)
+        except ValueError:
+            pass
     state = read_last_sync()
     return state.get(account_id) or _default_since_days_ago(7)
 

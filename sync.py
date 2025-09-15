@@ -13,7 +13,6 @@ def main() -> int:
     load_dotenv()
     dry_run = os.getenv("DRY_RUN", "").strip().lower() in {"1", "true", "yes", "on", "y"}
     test_suffix = os.getenv("LM_TEST_SUFFIX", "").strip()
-    flip_sign_env = os.getenv("LM_FLIP_SIGN", "").strip().lower() in {"1", "true", "yes", "on", "y"}
     account_ids_env = os.getenv("MONZO_ACCOUNT_IDS", "")
     account_ids: List[str] = [a.strip() for a in account_ids_env.split(",") if a.strip()]
     if not account_ids:
@@ -66,7 +65,7 @@ def main() -> int:
             monzo_ids_set,
             savings_pot_id=savings_pot_id,
             lm_savings_asset_id=lm_savings_asset_id,
-            flip_sign=flip_sign_env,
+            flip_sign=True,
         )
 
         # Create mirrored entries for internal transfers between Monzo accounts

@@ -45,19 +45,45 @@ Notes:
 
 ## Run
 
-Dry-run (fetch and transform only, no POSTs):
+### Recommended (activate venv and run)
+
+Live run with stdout passthrough:
 
 ```bash
-DRY_RUN=1 python3 sync.py
+source .venv/bin/activate && python sync.py | cat
 ```
 
-Live run:
+Dry-run (fetch/transform only, no POSTs):
 
 ```bash
-python3 sync.py
+source .venv/bin/activate && DRY_RUN=1 python sync.py | cat
+```
+
+Notes:
+
+- `| cat` forces full stdout passthrough in some terminals/loggers.
+- When the venv is active, `python` resolves to the virtualenv interpreter.
+
+### Alternatives
+
+If you prefer not to use a one-liner, you can run:
+
+```bash
+source .venv/bin/activate
+python sync.py
 ```
 
 Output includes per-account counts and overall totals. On success, the newest Monzo `created` timestamp per account is saved to `last_sync.json`.
+
+### Temporary backfill window (testing)
+
+To fetch a larger window for a one-off run (e.g., 14 or 30 days) without changing saved state:
+
+```bash
+source .venv/bin/activate && LM_OVERRIDE_SINCE_DAYS=14 python sync.py | cat
+```
+
+Omit `LM_OVERRIDE_SINCE_DAYS` afterwards to resume normal incremental syncing from `last_sync.json`.
 
 ## Cron (macOS)
 
