@@ -25,7 +25,7 @@ def create_transactions(transactions: List[Dict]) -> Dict:
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
-    payload = {"transactions": transactions}
+    payload = {"transactions": transactions, "apply_rules": True}
     response = requests.post(LUNCHMONEY_API_URL, headers=headers, json=payload, timeout=60)
     response.raise_for_status()
     return response.json()
