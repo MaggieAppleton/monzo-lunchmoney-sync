@@ -96,10 +96,10 @@ Edit crontab:
 crontab -e
 ```
 
-Example entry to run daily at 6am, logging to `sync.log` in the repo:
+Example entry to run daily at 8am, logging to `sync.log` in the repo:
 
 ```bash
-0 6 * * * cd /Users/helios/Github/monzo-lunchmoney-sync && /usr/bin/python3 sync.py >> sync.log 2>&1
+0 8 * * * cd /Users/helios/Github/monzo-lunchmoney-sync && /usr/bin/python3 sync.py >> sync.log 2>&1
 ```
 
 Tip: keep your `.env` in the repo root; `python-dotenv` loads it automatically.

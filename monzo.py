@@ -1,5 +1,12 @@
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
+class VerificationRequiredError(Exception):
+    def __init__(self, message: str, start_time: Optional[str] = None, end_time: Optional[str] = None, auth_session_id: Optional[str] = None):
+        super().__init__(message)
+        self.start_time = start_time
+        self.end_time = end_time
+        self.auth_session_id = auth_session_id
+
 
 import requests
 
@@ -26,8 +33,16 @@ def refresh_access_token() -> str:
     return str(payload["access_token"]) 
 
 
-def fetch_transactions(access_token: str, account_id: str, since_iso: str) -> List[Dict]:
-    """Fetch Monzo transactions since a timestamp for a specific account."""
+def fetch_transactions(
+    access_token: str,
+    account_id: str,
+    since_iso: str,
+    before_iso: Optional[str] = None,
+) -> List[Dict]:
+    """Fetch Monzo transactions for a specific account within a time window.
+
+    Required: since_iso. Optional: before_iso to limit the upper bound.
+    """
     if not access_token:
         raise ValueError("access_token is required")
     if not account_id:
@@ -36,10 +51,37 @@ def fetch_transactions(access_token: str, account_id: str, since_iso: str) -> Li
         "account_id": account_id,
         "since": since_iso,
     }
+    if before_iso:
+        params["before"] = before_iso
     headers = {"Authorization": f"Bearer {access_token}"}
     url = "https://api.monzo.com/transactions"
     response = requests.get(url, headers=headers, params=params, timeout=30)
-    response.raise_for_status()
+    if response.status_code == 403:
+        # Attempt to parse verification payload
+        try:
+            payload = response.json()
+            code = str(payload.get("code") or "")
+            if code.endswith("verification_required"):
+                params_obj = payload.get("params") or {}
+                raise VerificationRequiredError(
+                    payload.get("message") or "Verification required",
+                    start_time=params_obj.get("start_time"),
+                    end_time=params_obj.get("end_time"),
+                    auth_session_id=params_obj.get("auth_session_id"),
+                )
+        except VerificationRequiredError:
+            raise
+        except Exception:
+            pass
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as err:  # type: ignore[attr-defined]
+        detail = ""
+        try:
+            detail = f" body={response.text[:500]}"
+        except Exception:
+            detail = ""
+        raise requests.HTTPError(f"{err}{detail}")
     data: Dict = response.json()
     txns = data.get("transactions", [])
     # Only include finalized (settled) and not-declined transactions

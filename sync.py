@@ -2,6 +2,8 @@ import os
 import json
 import sys
 import unicodedata
+import argparse
+from datetime import datetime, timezone
 from typing import Dict, List
 from dotenv import load_dotenv
 
@@ -31,10 +33,37 @@ def _normalize_category_name(name: str) -> str:
     return " ".join(joined.split())
 
 
+def _parse_since_date_to_iso(start_date: str) -> str:
+    """Convert YYYY-MM-DD to ISO8601 at UTC midnight with Z suffix.
+
+    Example: "2025-01-01" -> "2025-01-01T00:00:00Z"
+    """
+    dt = datetime.strptime(start_date, "%Y-%m-%d").replace(
+        hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc
+    )
+    return dt.isoformat().replace("+00:00", "Z")
+
+
 def main() -> int:
     load_dotenv()
     dry_run = os.getenv("DRY_RUN", "").strip().lower() in {"1", "true", "yes", "on", "y"}
-    test_suffix = os.getenv("LM_TEST_SUFFIX", "").strip()
+
+    parser = argparse.ArgumentParser(description="Sync Monzo transactions into Lunch Money")
+    parser.add_argument(
+        "--since",
+        type=str,
+        default="",
+        help="Backfill start date in YYYY-MM-DD (UTC midnight)",
+    )
+    args = parser.parse_args()
+
+    since_override_iso = None
+    if args.since.strip():
+        try:
+            since_override_iso = _parse_since_date_to_iso(args.since.strip())
+        except Exception as exc:  # noqa: BLE001
+            print(f"Invalid --since date (expected YYYY-MM-DD): {exc}")
+            return 2
     account_ids_env = os.getenv("MONZO_ACCOUNT_IDS", "")
     account_ids: List[str] = [a.strip() for a in account_ids_env.split(",") if a.strip()]
     if not account_ids:
@@ -140,7 +169,7 @@ def main() -> int:
             print(f"Warning: failed to load category_map.json: {exc}")
 
     for account_id in account_ids:
-        since = get_since_for_account(account_id)
+        since = since_override_iso or get_since_for_account(account_id)
         try:
             txns = fetch_transactions(access_token, account_id, since)
         except Exception as exc:  # noqa: BLE001
@@ -199,11 +228,6 @@ def main() -> int:
                 if t.get("asset_id") is None:
                     t["asset_id"] = asset_id
 
-        # Apply optional test suffix to external_id to avoid idempotent conflicts during replays
-        if test_suffix:
-            for t in lm_txns:
-                if t.get("external_id"):
-                    t["external_id"] = f"{t['external_id']}{test_suffix}"
         totals_by_account[account_id] = len(lm_txns)
 
         if dry_run:
