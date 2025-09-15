@@ -35,11 +35,14 @@ DRY_RUN=1
 # Optional: mirror a specific Monzo savings pot into a separate LM asset
 MONZO_SAVINGS_POT_ID=pot_0000000000000000000000
 LM_SAVINGS_ASSET_ID=9012
+# Optional: friendly labels for Monzo accounts used in internal transfer notes
+# Example: MONZO_ACCOUNT_LABELS="acc_0000000000000000:personal,acc_0000000000000000:joint"
+MONZO_ACCOUNT_LABELS=acc_...:personal,acc_...:joint
 ```
 
 Notes:
 
-- `MONZO_ACCOUNT_IDS` should include your three account ids (personal, joint, savings), comma-separated.
+- `MONZO_ACCOUNT_IDS` should include your account ids (personal, joint), comma-separated.
 - Internal movements and Pot transfers are included and categorized as Bank Transfers when `LM_CATEGORY_BANK_TRANSFER_ID` is set.
 - If you want to treat a Monzo pot as a separate Lunch Money account, set `MONZO_SAVINGS_POT_ID` and `LM_SAVINGS_ASSET_ID` to mirror those transfers.
 
@@ -133,3 +136,25 @@ Behavior:
 - No sensitive values are logged. Logs show counts and timestamps only.
 - Idempotency via `external_id` avoids duplicates on retries.
 - `DRY_RUN` helps validate setup before live posting.
+
+## Category mapping (Monzo → Lunch Money)
+
+Optionally create a `category_map.json` in the repo root to map Monzo transaction categories to Lunch Money categories. When present, non-transfer transactions will use this mapping to set `category_id`.
+
+Example `category_map.json`:
+
+```json
+{
+	"groceries": 111111,
+	"eating_out": "🥬 Groceries",
+	"transport": "🚗 Transportation",
+	"bills": "🏠 Housing"
+}
+```
+
+Notes:
+
+- Monzo category keys are lower-case like `groceries`, `eating_out`, `transport`, etc.
+- Values can be either a numeric Lunch Money `category_id` or the exact Lunch Money category name (with or without emoji). Names are normalized (emoji stripped, case/whitespace-insensitive) and resolved via the Lunch Money API.
+- Internal transfers and pot transfers still use `LM_CATEGORY_BANK_TRANSFER_ID` when set, regardless of the map.
+- If a Monzo category isn’t present in the map, the transaction is left uncategorized in Lunch Money.

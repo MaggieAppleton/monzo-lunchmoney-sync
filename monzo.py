@@ -46,3 +46,16 @@ def fetch_transactions(access_token: str, account_id: str, since_iso: str) -> Li
     return [t for t in txns if not t.get("declined") and t.get("settled")]
 
 
+def list_accounts(access_token: str) -> List[Dict]:
+    """List Monzo accounts accessible by the provided token (open accounts only)."""
+    if not access_token:
+        raise ValueError("access_token is required")
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = "https://api.monzo.com/accounts"
+    response = requests.get(url, headers=headers, timeout=30)
+    response.raise_for_status()
+    data: Dict = response.json()
+    accounts = data.get("accounts", [])
+    return [a for a in accounts if not a.get("closed")]
+
+

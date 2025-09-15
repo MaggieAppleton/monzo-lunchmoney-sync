@@ -1,12 +1,34 @@
 import os
+import json
 import sys
+import unicodedata
 from typing import Dict, List
 from dotenv import load_dotenv
 
 from monzo import refresh_access_token, fetch_transactions
 from state import get_since_for_account, write_last_sync
 from transform import batch_transform
-from lunchmoney import create_transactions
+from lunchmoney import create_transactions, list_categories
+
+
+def _normalize_category_name(name: str) -> str:
+    """Normalize a Lunch Money category name for comparison.
+
+    - Removes emoji/symbols by keeping only alphanumerics and spaces
+    - Collapses whitespace and lowercases
+    Examples:
+      "🥬 Groceries" -> "groceries"
+      "Pubs and Restaurants" -> "pubs and restaurants"
+    """
+    if not isinstance(name, str):
+        return ""
+    s = unicodedata.normalize("NFKD", name.strip())
+    buf = []
+    for ch in s:
+        if ch.isalnum() or ch.isspace():
+            buf.append(ch)
+    joined = "".join(buf).lower()
+    return " ".join(joined.split())
 
 
 def main() -> int:
@@ -52,6 +74,71 @@ def main() -> int:
                     asset_map[acc] = int(aid.strip())
                 except ValueError:
                     pass
+    # Optional labels for Monzo accounts to phrase mirror notes nicely
+    # Example: MONZO_ACCOUNT_LABELS="acc_personal:personal,acc_joint:joint"
+    raw_label_map = os.getenv("MONZO_ACCOUNT_LABELS", "")
+    account_labels: Dict[str, str] = {}
+    if raw_label_map:
+        for pair in raw_label_map.split(","):
+            if ":" in pair:
+                acc, label = pair.split(":", 1)
+                acc = acc.strip()
+                label = label.strip()
+                if acc and label:
+                    account_labels[acc] = label
+    # Optional Monzo -> Lunch Money category map (from category_map.json in repo root)
+    category_map_path = os.path.join(os.path.dirname(__file__), "category_map.json")
+    category_map: Dict[str, int] = {}
+    if os.path.exists(category_map_path):
+        try:
+            with open(category_map_path, "r", encoding="utf-8") as fh:
+                raw = json.load(fh)
+                if isinstance(raw, dict):
+                    # If values are not ints, we will resolve names to ids below
+                    # First, attempt direct int mapping for any numeric values
+                    numeric_map: Dict[str, int] = {}
+                    name_keys: Dict[str, str] = {}
+                    for k, v in raw.items():
+                        key = str(k)
+                        if key:
+                            try:
+                                numeric_map[key] = int(v)
+                            except Exception:
+                                name_keys[key] = str(v)
+                    # If any name values exist, fetch LM categories and resolve
+                    if name_keys or numeric_map:
+                        try:
+                            cats = list_categories()
+                            # Build normalization map: name (with and without emoji) -> id
+                            norm_to_id: Dict[str, int] = {}
+                            assignable_ids: Dict[int, bool] = {}
+                            for c in cats.get("categories", []):
+                                cid = c.get("id")
+                                name = c.get("name") or ""
+                                group_id = c.get("group_id")
+                                # Treat only items with a group_id as assignable categories
+                                if isinstance(cid, int) and name and group_id is not None:
+                                    norm_name = _normalize_category_name(name)
+                                    if norm_name:
+                                        norm_to_id[norm_name] = cid
+                                    assignable_ids[cid] = True
+                            # Resolve names to ids
+                            for monzo_key, lm_name in name_keys.items():
+                                norm = _normalize_category_name(lm_name)
+                                cid = norm_to_id.get(norm)
+                                if isinstance(cid, int):
+                                    numeric_map[monzo_key] = cid
+                            # Drop any numeric ids that are not assignable (likely category groups)
+                            invalid_keys = [k for k, v in numeric_map.items() if v not in assignable_ids]
+                            for k in invalid_keys:
+                                print(f"Warning: mapping for '{k}' points to a category group or invalid id; ignoring.")
+                                numeric_map.pop(k, None)
+                        except Exception as exc:  # noqa: BLE001
+                            print(f"Warning: failed to resolve category names via Lunch Money API: {exc}")
+                    category_map = numeric_map
+        except Exception as exc:  # noqa: BLE001
+            print(f"Warning: failed to load category_map.json: {exc}")
+
     for account_id in account_ids:
         since = get_since_for_account(account_id)
         try:
@@ -63,6 +150,7 @@ def main() -> int:
             txns,
             bank_transfer_category_id,
             monzo_ids_set,
+            category_map=category_map or None,
             savings_pot_id=savings_pot_id,
             lm_savings_asset_id=lm_savings_asset_id,
             flip_sign=True,
@@ -82,7 +170,15 @@ def main() -> int:
             if target_asset_id is None:
                 continue
             base = dict(lm_txns[idx])
-            base["notes"] = (base.get("notes") or "") + " | Mirror to counterparty account"
+            # Build friendlier mirror notes
+            source_label = account_labels.get(account_id)
+            target_label = account_labels.get(cp)
+            if source_label and target_label:
+                phrase = f"Transfer to {target_label} from {source_label}"
+            else:
+                phrase = "Transfer between Monzo accounts"
+            existing_notes = (base.get("notes") or "").strip()
+            base["notes"] = f"{existing_notes} | {phrase}" if existing_notes else phrase
             # Flip sign for the mirrored leg
             if isinstance(base.get("amount"), (int, float)):
                 base["amount"] = -float(base["amount"])
