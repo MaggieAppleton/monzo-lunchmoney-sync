@@ -4,4 +4,4 @@ last_sync.json
 *.pyc
 .DS_Store
 sync.log
-
+category_map.json
