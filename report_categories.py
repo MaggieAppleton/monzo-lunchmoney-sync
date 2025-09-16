@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 from dotenv import load_dotenv
 
-from monzo import fetch_transactions, refresh_access_token, list_accounts
+from monzo import fetch_transactions, get_access_token, list_accounts
 from lunchmoney import list_categories
 
 
@@ -92,7 +92,7 @@ def main() -> int:
         token_preview = os.getenv("MONZO_ACCESS_TOKEN", "").strip()
         if not token_preview:
             try:
-                token_preview = refresh_access_token()
+                token_preview = get_access_token()
             except Exception:
                 token_preview = ""
         if token_preview:
@@ -109,7 +109,7 @@ def main() -> int:
     access_token = os.getenv("MONZO_ACCESS_TOKEN", "").strip()
     if not access_token:
         try:
-            access_token = refresh_access_token()
+            access_token = get_access_token()
         except Exception as exc:  # noqa: BLE001
             print(f"Failed to refresh Monzo access token: {exc}")
             return 1

@@ -11,26 +11,29 @@ class VerificationRequiredError(Exception):
 import requests
 
 
-def refresh_access_token() -> str:
-    """Refresh Monzo OAuth2 access token using refresh token from env."""
-    client_id = os.getenv("MONZO_CLIENT_ID")
-    client_secret = os.getenv("MONZO_CLIENT_SECRET")
-    refresh_token = os.getenv("MONZO_REFRESH_TOKEN")
-
-    if not all([client_id, client_secret, refresh_token]):
-        raise ValueError("Missing MONZO_CLIENT_ID/SECRET/REFRESH_TOKEN in environment")
-
-    url = "https://api.monzo.com/oauth2/token"
-    data = {
-        "grant_type": "refresh_token",
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh_token,
-    }
-    response = requests.post(url, data=data, timeout=30)
-    response.raise_for_status()
-    payload: Dict = response.json()
-    return str(payload["access_token"]) 
+def get_access_token() -> str:
+    """Get a valid Monzo access token.
+    
+    This will first try to use MONZO_ACCESS_TOKEN from env if available.
+    Once OAuth client is approved, it will use the full OAuth flow instead.
+    
+    Returns:
+        str: A valid access token
+        
+    Raises:
+        ValueError: If no valid authentication method is available
+    """
+    # First try direct access token
+    access_token = os.getenv("MONZO_ACCESS_TOKEN")
+    if access_token:
+        return access_token
+        
+    # Fall back to OAuth flow once client is approved
+    try:
+        from auth import ensure_valid_auth
+        return ensure_valid_auth()
+    except ImportError:
+        raise ValueError("MONZO_ACCESS_TOKEN not found in environment")
 
 
 def fetch_transactions(
