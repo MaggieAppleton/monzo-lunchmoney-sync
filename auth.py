@@ -25,7 +25,7 @@ load_dotenv()
 # Constants
 MONZO_AUTH_URL = "https://auth.monzo.com"
 MONZO_TOKEN_URL = "https://api.monzo.com/oauth2/token"
-REDIRECT_PORT = 8089  # Using a non-standard port for security
+REDIRECT_PORT = 8080  # Using standard port for better compatibility
 REDIRECT_URI = f"http://localhost:{REDIRECT_PORT}/callback"
 
 # Keyring service name for storing tokens
@@ -111,7 +111,8 @@ def get_auth_url() -> Tuple[str, str]:
         "client_id": client_id,
         "redirect_uri": REDIRECT_URI,
         "response_type": "code",
-        "state": state
+        "state": state,
+        "scope": "accounts:read transactions:read balance:read"
     }
     auth_url = f"{MONZO_AUTH_URL}/?{urlencode(params)}"
     return auth_url, state

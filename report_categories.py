@@ -89,12 +89,10 @@ def main() -> int:
     if not account_ids:
         print("MONZO_ACCOUNT_IDS is not set or empty. Use --accounts to provide ids.")
         # Attempt to list accessible accounts to help the user
-        token_preview = os.getenv("MONZO_ACCESS_TOKEN", "").strip()
-        if not token_preview:
-            try:
-                token_preview = get_access_token()
-            except Exception:
-                token_preview = ""
+        try:
+            token_preview = get_access_token()
+        except Exception:
+            token_preview = ""
         if token_preview:
             try:
                 accts = list_accounts(token_preview)
@@ -106,13 +104,11 @@ def main() -> int:
                 print(f"(Could not list accounts: {exc})")
         return 1
 
-    access_token = os.getenv("MONZO_ACCESS_TOKEN", "").strip()
-    if not access_token:
-        try:
-            access_token = get_access_token()
-        except Exception as exc:  # noqa: BLE001
-            print(f"Failed to refresh Monzo access token: {exc}")
-            return 1
+    try:
+        access_token = get_access_token()
+    except Exception as exc:  # noqa: BLE001
+        print(f"Failed to get Monzo access token: {exc}")
+        return 1
 
     since_iso = iso_since_days(args.days)
     # Show accessible accounts to verify ids quickly

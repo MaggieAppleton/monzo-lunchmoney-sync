@@ -12,28 +12,16 @@ import requests
 
 
 def get_access_token() -> str:
-    """Get a valid Monzo access token.
-    
-    This will first try to use MONZO_ACCESS_TOKEN from env if available.
-    Once OAuth client is approved, it will use the full OAuth flow instead.
+    """Get a valid Monzo access token using OAuth flow.
     
     Returns:
         str: A valid access token
         
     Raises:
-        ValueError: If no valid authentication method is available
+        ValueError: If OAuth flow fails
     """
-    # First try direct access token
-    access_token = os.getenv("MONZO_ACCESS_TOKEN")
-    if access_token:
-        return access_token
-        
-    # Fall back to OAuth flow once client is approved
-    try:
-        from auth import ensure_valid_auth
-        return ensure_valid_auth()
-    except ImportError:
-        raise ValueError("MONZO_ACCESS_TOKEN not found in environment")
+    from auth import ensure_valid_auth
+    return ensure_valid_auth()
 
 
 def fetch_transactions(

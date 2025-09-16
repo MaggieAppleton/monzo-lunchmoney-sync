@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from typing import Dict, List
 from dotenv import load_dotenv
 
-from monzo import refresh_access_token, fetch_transactions
+from monzo import fetch_transactions
+from auth import refresh_access_token
 from state import get_since_for_account, write_last_sync
 from transform import batch_transform
 from lunchmoney import create_transactions, list_categories
@@ -70,14 +71,13 @@ def main() -> int:
         print("MONZO_ACCOUNT_IDS is not set or empty.")
         return 1
 
-    # Prefer a provided access token; otherwise refresh via OAuth2
-    access_token = os.getenv("MONZO_ACCESS_TOKEN", "").strip()
-    if not access_token:
-        try:
-            access_token = refresh_access_token()
-        except Exception as exc:  # noqa: BLE001
-            print(f"Failed to refresh Monzo access token: {exc}")
-            return 1
+    # Use OAuth2 flow to get access token
+    try:
+        from auth import ensure_valid_auth
+        access_token = ensure_valid_auth()
+    except Exception as exc:  # noqa: BLE001
+        print(f"Failed to get Monzo access token: {exc}")
+        return 1
 
     totals_by_account: Dict[str, int] = {}
     posted_by_account: Dict[str, int] = {}
