@@ -1,11 +1,19 @@
-.env
 __pycache__/
 *.pyc
 .DS_Store
 sync.log
 
-# Local data files
+# Ignore all local data by default
+data/**
 data/monzo_snapshot_*.json
 data/interest.json
 data/last_sync.json
 data/category_map.json
+
+# Logs
+*.log
+
+# Virtualenvs and local environment variants
+.venv/
+.env
+.env.*
