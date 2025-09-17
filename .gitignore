@@ -1,7 +1,11 @@
 .env
 __pycache__/
-last_sync.json
 *.pyc
 .DS_Store
 sync.log
-category_map.json
+
+# Local data files
+data/monzo_snapshot_*.json
+data/interest.json
+data/last_sync.json
+data/category_map.json
