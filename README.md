@@ -5,7 +5,7 @@ Local Python script that syncs recent Monzo transactions into Lunch Money.
 ## Prereqs
 
 - Python 3.9+ recommended
-- A Monzo OAuth2 client (client id/secret + refresh token)
+- A Monzo OAuth2 client (client id/secret)
 - A Lunch Money Personal Access Token
 
 ## Install
@@ -22,22 +22,15 @@ Create a `.env` file in the repo root with:
 ```bash
 MONZO_CLIENT_ID=...
 MONZO_CLIENT_SECRET=...
-MONZO_REFRESH_TOKEN=...
-MONZO_ACCOUNT_IDS=acc_...,acc_...,acc_...
+MONZO_ACCOUNT_IDS=acc_...,acc_...
 LUNCHMONEY_ACCESS_TOKEN=...
-# Optional: category id in Lunch Money for bank transfers
+LM_ASSET_IDS_MAP=acc_...:1234,acc_...:5678
+# Optional:
 LM_CATEGORY_BANK_TRANSFER_ID=123456
-# Optional: map Monzo account_id to Lunch Money asset_id (comma-separated pairs)
-# Find asset_id in Lunch Money by filtering by account in the UI (see URL param `asset=`)
-LM_ASSET_IDS_MAP=acc_000...:1234,acc_000...:5678,acc_000...:9012
-# Optional: dry-run to avoid posting to Lunch Money
-DRY_RUN=1
-# Optional: mirror a specific Monzo savings pot into a separate LM asset
-MONZO_SAVINGS_POT_ID=pot_0000000000000000000000
+MONZO_SAVINGS_POT_ID=pot_000...
 LM_SAVINGS_ASSET_ID=9012
-# Optional: friendly labels for Monzo accounts used in internal transfer notes
-# Example: MONZO_ACCOUNT_LABELS="acc_0000000000000000:personal,acc_0000000000000000:joint"
 MONZO_ACCOUNT_LABELS=acc_...:personal,acc_...:joint
+DRY_RUN=true
 ```
 
 Notes:
@@ -45,6 +38,9 @@ Notes:
 - `MONZO_ACCOUNT_IDS` should include your account ids (personal, joint), comma-separated.
 - Internal movements and Pot transfers are included and categorized as Bank Transfers when `LM_CATEGORY_BANK_TRANSFER_ID` is set.
 - If you want to treat a Monzo pot as a separate Lunch Money account, set `MONZO_SAVINGS_POT_ID` and `LM_SAVINGS_ASSET_ID` to mirror those transfers.
+- `LM_ASSET_IDS_MAP` must include a mapping for every `account_id` in `MONZO_ACCOUNT_IDS`; the script exits if any are missing.
+- Only finalized (settled) and not-declined transactions are synced.
+- `category_map.json` is read from `data/category_map.json` if present (preferred). A legacy `category_map.json` in the repo root is also supported.
 
 ## Run
 
@@ -64,6 +60,7 @@ source .venv/bin/activate && DRY_RUN=1 python sync.py | cat
 
 Notes:
 
+- On first run, the script opens the browser for Monzo OAuth; tokens are stored in the system keychain. No tokens are written to .env.
 - `| cat` forces full stdout passthrough in some terminals/loggers.
 - When the venv is active, `python` resolves to the virtualenv interpreter.
 
@@ -76,7 +73,7 @@ source .venv/bin/activate
 python sync.py
 ```
 
-Output includes per-account counts and overall totals. On success, the newest Monzo `created` timestamp per account is saved to `last_sync.json`.
+Output includes per-account counts and overall totals. On success, the newest Monzo `created` timestamp per account is saved to `data/last_sync.json`.
 
 ### Temporary backfill window (testing)
 
@@ -106,7 +103,7 @@ Tip: keep your `.env` in the repo root; `python-dotenv` loads it automatically.
 
 ## How it works (high level)
 
-1. Refresh Monzo access token using the refresh token at `https://api.monzo.com/oauth2/token`.
+1. Obtain/refresh a Monzo access token via OAuth; tokens are stored in the system keychain.
 2. For each `account_id` in `MONZO_ACCOUNT_IDS`, fetch transactions since that account’s `last_sync`.
 3. Transform to Lunch Money format; detect internal/Pot transfers and assign the Bank Transfers category.
 4. POST batch to Lunch Money at `https://api.lunchmoney.app/v1/transactions` with `external_id` for idempotency.
