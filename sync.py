@@ -137,8 +137,13 @@ def main() -> int:
                 label = label.strip()
                 if acc and label:
                     account_labels[acc] = label
-    # Optional Monzo -> Lunch Money category map (from category_map.json in repo root)
-    category_map_path = os.path.join(os.path.dirname(__file__), "category_map.json")
+    # Optional Monzo -> Lunch Money category map (prefer data/category_map.json, fallback to repo root)
+    base_dir = os.path.dirname(__file__)
+    category_map_path = os.path.join(base_dir, "data", "category_map.json")
+    if not os.path.exists(category_map_path):
+        legacy = os.path.join(base_dir, "category_map.json")
+        if os.path.exists(legacy):
+            category_map_path = legacy
     category_map: Dict[str, int] = {}
     if os.path.exists(category_map_path):
         try:

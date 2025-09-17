@@ -30,7 +30,7 @@ LM_CATEGORY_BANK_TRANSFER_ID=123456
 # Optional: map Monzo account_id to Lunch Money asset_id (comma-separated pairs)
 # Find asset_id in Lunch Money by filtering by account in the UI (see URL param `asset=`)
 LM_ASSET_IDS_MAP=acc_000...:1234,acc_000...:5678,acc_000...:9012
-# Optional: dry-run to avoid posting
+# Optional: dry-run to avoid posting to Lunch Money
 DRY_RUN=1
 # Optional: mirror a specific Monzo savings pot into a separate LM asset
 MONZO_SAVINGS_POT_ID=pot_0000000000000000000000
