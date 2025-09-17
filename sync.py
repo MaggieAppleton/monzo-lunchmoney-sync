@@ -7,11 +7,11 @@ from datetime import datetime, timezone
 from typing import Dict, List
 from dotenv import load_dotenv
 
-from monzo import fetch_transactions
+from monzo import fetch_transactions, fetch_account_balance, list_pots
 from auth import refresh_access_token
 from state import get_since_for_account, write_last_sync
 from transform import batch_transform
-from lunchmoney import create_transactions, list_categories
+from lunchmoney import create_transactions, list_categories, list_transactions, update_asset
 
 
 def _normalize_category_name(name: str) -> str:
@@ -56,6 +56,12 @@ def main() -> int:
         default="",
         help="Backfill start date in YYYY-MM-DD (UTC midnight)",
     )
+    parser.add_argument(
+        "--before",
+        type=str,
+        default="",
+        help="End date in YYYY-MM-DD (UTC midnight)",
+    )
     args = parser.parse_args()
 
     since_override_iso = None
@@ -64,6 +70,14 @@ def main() -> int:
             since_override_iso = _parse_since_date_to_iso(args.since.strip())
         except Exception as exc:  # noqa: BLE001
             print(f"Invalid --since date (expected YYYY-MM-DD): {exc}")
+            return 2
+            
+    before_override_iso = None
+    if args.before.strip():
+        try:
+            before_override_iso = _parse_since_date_to_iso(args.before.strip())
+        except Exception as exc:  # noqa: BLE001
+            print(f"Invalid --before date (expected YYYY-MM-DD): {exc}")
             return 2
     account_ids_env = os.getenv("MONZO_ACCOUNT_IDS", "")
     account_ids: List[str] = [a.strip() for a in account_ids_env.split(",") if a.strip()]
@@ -103,6 +117,14 @@ def main() -> int:
                     asset_map[acc] = int(aid.strip())
                 except ValueError:
                     pass
+    # Enforce asset mapping for all configured accounts to prevent cash transactions
+    missing_assets = [acc for acc in account_ids if acc not in asset_map]
+    if missing_assets:
+        print(
+            "LM_ASSET_IDS_MAP is missing mappings for these Monzo account_ids: "
+            + ", ".join(missing_assets)
+        )
+        return 1
     # Optional labels for Monzo accounts to phrase mirror notes nicely
     # Example: MONZO_ACCOUNT_LABELS="acc_personal:personal,acc_joint:joint"
     raw_label_map = os.getenv("MONZO_ACCOUNT_LABELS", "")
@@ -171,7 +193,7 @@ def main() -> int:
     for account_id in account_ids:
         since = since_override_iso or get_since_for_account(account_id)
         try:
-            txns = fetch_transactions(access_token, account_id, since)
+            txns = fetch_transactions(access_token, account_id, since, before_override_iso)
         except Exception as exc:  # noqa: BLE001
             print(f"Failed to fetch transactions for {account_id}: {exc}")
             return 1
@@ -220,19 +242,64 @@ def main() -> int:
 
         if internal_mirrors:
             lm_txns.extend(internal_mirrors)
-        # Attach asset_id if configured for this account, but do not override
-        # an explicit asset_id (e.g., mirrored savings pot transaction)
+        # Attach asset_id for all transactions that don't already have it
         asset_id = asset_map.get(account_id)
-        if asset_id is not None:
-            for t in lm_txns:
-                if t.get("asset_id") is None:
-                    t["asset_id"] = asset_id
+        for t in lm_txns:
+            if t.get("asset_id") is None:
+                t["asset_id"] = asset_id
+
+        # Preflight existing LM external_ids for the date window and de-dup before POST
+        # Determine a conservative date range to check: from 'since' date to either
+        # provided 'before' or today.
+        start_date = (since or "")[:10]
+        if before_override_iso:
+            end_date = before_override_iso[:10]
+        else:
+            # If we fetched any Monzo txns, use their newest created date as end
+            end_date = ""
+            if txns:
+                newest_created = max(t.get("created", "") for t in txns)
+                end_date = newest_created[:10] if newest_created else ""
+            if not end_date:
+                end_date = datetime.now(timezone.utc).date().isoformat()
+
+        existing_ids: set[str] = set()
+        try:
+            resp = list_transactions(start_date=start_date, end_date=end_date, debit_as_negative=True)
+            for row in resp.get("transactions", []):
+                ext = row.get("external_id")
+                if isinstance(ext, str) and ext:
+                    existing_ids.add(ext)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Warning: failed to preflight existing LM external_ids: {exc}")
+
+        if existing_ids:
+            before_count = len(lm_txns)
+            lm_txns = [t for t in lm_txns if not t.get("external_id") or t["external_id"] not in existing_ids]
+            after_count = len(lm_txns)
+            skipped = before_count - after_count
+            if skipped > 0:
+                print(f"{account_id}: skipping {skipped} already-present transactions (by external_id)")
+
+        # Final safety: ensure no transaction will post without an asset_id
+        missing_asset_rows = [t for t in lm_txns if t.get("asset_id") is None]
+        if missing_asset_rows:
+            print(f"{account_id}: refusing to post {len(missing_asset_rows)} transactions without asset_id. Check LM_ASSET_IDS_MAP.")
+            return 1
 
         totals_by_account[account_id] = len(lm_txns)
 
         if dry_run:
             posted_by_account[account_id] = 0
             print(f"{account_id}: DRY-RUN would post {len(lm_txns)} transactions since {since}")
+            # Still fetch and print intended balance updates in dry-run
+            try:
+                bal = fetch_account_balance(access_token, account_id)
+                asset_id_for_account = asset_map.get(account_id)
+                if asset_id_for_account is not None:
+                    print(f"{account_id}: DRY-RUN would set LM asset {asset_id_for_account} balance to {bal['balance']:.2f} {bal['currency']}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"Warning: failed to fetch Monzo balance for {account_id}: {exc}")
             continue
 
         # Post to Lunch Money
@@ -264,7 +331,45 @@ def main() -> int:
             if newest_created:
                 write_last_sync({account_id: str(newest_created)})
 
+        # After posting transactions, sync LM asset balance with Monzo current balance
+        try:
+            bal = fetch_account_balance(access_token, account_id)
+            asset_id_for_account = asset_map.get(account_id)
+            if asset_id_for_account is not None:
+                # Lunch Money expects balance in major units
+                update_asset(int(asset_id_for_account), {"balance": float(bal["balance"])})
+                print(f"{account_id}: updated LM asset {asset_id_for_account} balance to {bal['balance']:.2f} {bal['currency']}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"Warning: failed to update LM balance for {account_id}: {exc}")
+
     overall = sum(totals_by_account.values())
+    # Optionally sync a specific Monzo pot's balance to a separate LM asset
+    if savings_pot_id and lm_savings_asset_id:
+        try:
+            pots = list_pots(access_token)
+            target = None
+            for p in pots:
+                if str(p.get("id")) == str(savings_pot_id):
+                    target = p
+                    break
+            if target is not None:
+                pot_balance_minor = int(target.get("balance", 0) or 0)
+                pot_currency = str(target.get("currency") or "GBP")
+                pot_balance = pot_balance_minor / 100.0
+                if dry_run:
+                    print(
+                        f"pot {savings_pot_id}: DRY-RUN would set LM asset {lm_savings_asset_id} balance to {pot_balance:.2f} {pot_currency}"
+                    )
+                else:
+                    update_asset(int(lm_savings_asset_id), {"balance": float(pot_balance)})
+                    print(
+                        f"pot {savings_pot_id}: updated LM asset {lm_savings_asset_id} balance to {pot_balance:.2f} {pot_currency}"
+                    )
+            else:
+                print(f"Warning: savings pot id {savings_pot_id} not found when syncing balance")
+        except Exception as exc:  # noqa: BLE001
+            print(f"Warning: failed to sync savings pot balance: {exc}")
+
     if dry_run:
         print(f"DRY-RUN fetched {overall} transactions across {len(account_ids)} accounts.")
     else:

@@ -92,3 +92,50 @@ def list_accounts(access_token: str) -> List[Dict]:
     return [a for a in accounts if not a.get("closed")]
 
 
+def fetch_account_balance(access_token: str, account_id: str) -> Dict:
+    """Fetch current balance for a Monzo account.
+
+    Returns a dict with keys: balance_minor (int), currency (str), spend_today_minor (int),
+    and balance (float) converted to major units.
+    """
+    if not access_token:
+        raise ValueError("access_token is required")
+    if not account_id:
+        raise ValueError("account_id is required")
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = "https://api.monzo.com/balance"
+    params = {"account_id": account_id}
+    response = requests.get(url, headers=headers, params=params, timeout=30)
+    response.raise_for_status()
+    payload: Dict = response.json()
+    balance_minor = int(payload.get("balance", 0) or 0)
+    spend_today_minor = int(payload.get("spend_today", 0) or 0)
+    currency = str(payload.get("currency") or "GBP")
+    # Convert minor units (pennies) to major units (pounds)
+    balance = balance_minor / 100.0
+    return {
+        "balance_minor": balance_minor,
+        "balance": balance,
+        "currency": currency,
+        "spend_today_minor": spend_today_minor,
+    }
+
+
+def list_pots(access_token: str, current_account_id: Optional[str] = None) -> List[Dict]:
+    """List Monzo pots. Optionally scope to a current account id.
+
+    Returns list of pot dicts as provided by Monzo API.
+    """
+    if not access_token:
+        raise ValueError("access_token is required")
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = "https://api.monzo.com/pots"
+    params: Dict[str, str] = {}
+    if current_account_id:
+        params["current_account_id"] = current_account_id
+    response = requests.get(url, headers=headers, params=params or None, timeout=30)
+    response.raise_for_status()
+    data: Dict = response.json()
+    return data.get("pots", []) or []
+
+
