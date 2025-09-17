@@ -3,9 +3,7 @@ import os
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Tuple
-
 from dotenv import load_dotenv
-
 from monzo import fetch_transactions, get_access_token, list_accounts
 from lunchmoney import list_categories
 

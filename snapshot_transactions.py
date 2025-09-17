@@ -11,7 +11,6 @@ import argparse
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
-
 from monzo import fetch_transactions, VerificationRequiredError
 from auth import ensure_valid_auth
 

@@ -6,7 +6,6 @@ import argparse
 from datetime import datetime, timezone
 from typing import Dict, List
 from dotenv import load_dotenv
-
 from monzo import fetch_transactions, fetch_account_balance, list_pots
 from auth import refresh_access_token
 from state import get_since_for_account, write_last_sync

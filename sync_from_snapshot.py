@@ -9,7 +9,6 @@ import argparse
 from datetime import datetime
 from typing import Dict, List, Optional, Set
 from dotenv import load_dotenv
-
 from transform import batch_transform
 from lunchmoney import create_transactions, list_transactions
 

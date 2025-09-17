@@ -1,15 +1,13 @@
 import os
+import requests
 from typing import Dict, List, Optional
+
 class VerificationRequiredError(Exception):
     def __init__(self, message: str, start_time: Optional[str] = None, end_time: Optional[str] = None, auth_session_id: Optional[str] = None):
         super().__init__(message)
         self.start_time = start_time
         self.end_time = end_time
         self.auth_session_id = auth_session_id
-
-
-import requests
-
 
 def get_access_token() -> str:
     """Get a valid Monzo access token using OAuth flow.

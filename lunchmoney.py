@@ -1,15 +1,12 @@
 import os
 from typing import Dict, List
-
 import requests
-
 
 LUNCHMONEY_API_URL = "https://api.lunchmoney.app/v1/transactions"
 LUNCHMONEY_CATEGORIES_URL = "https://api.lunchmoney.app/v1/categories"
 LUNCHMONEY_ASSETS_URL = "https://api.lunchmoney.app/v1/assets"
 LUNCHMONEY_TX_URL = "https://api.lunchmoney.app/v1/transactions/{id}"
 LUNCHMONEY_ASSET_URL = "https://api.lunchmoney.app/v1/assets/{id}"
-
 
 def create_transactions(transactions: List[Dict]) -> Dict:
     """Create transactions in Lunch Money.

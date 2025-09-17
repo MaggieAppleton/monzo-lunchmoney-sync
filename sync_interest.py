@@ -3,9 +3,7 @@ import os
 import sys
 import json
 from typing import Any, Dict, List
-
 from dotenv import load_dotenv
-
 from lunchmoney import create_transactions
 
 

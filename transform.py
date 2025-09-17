@@ -1,7 +1,6 @@
 from typing import Dict, List, Optional, Set
 from datetime import datetime, timezone
 
-
 def _is_internal_or_pot_transfer(txn: Dict, monzo_account_ids: Set[str]) -> bool:
     counterparty = txn.get("counterparty") or {}
     metadata = txn.get("metadata") or {}

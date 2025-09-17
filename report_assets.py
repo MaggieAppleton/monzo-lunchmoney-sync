@@ -1,9 +1,7 @@
 import os
 import sys
 from typing import Any, Dict, List
-
 from dotenv import load_dotenv
-
 from lunchmoney import list_assets
 
 
