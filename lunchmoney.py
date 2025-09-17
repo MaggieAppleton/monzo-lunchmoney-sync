@@ -151,8 +151,17 @@ def update_asset(asset_id: int, updates: Dict) -> Dict:
         "Content-Type": "application/json",
     }
     url = LUNCHMONEY_ASSET_URL.format(id=int(asset_id))
-    response = requests.patch(url, headers=headers, json=updates, timeout=60)
-    response.raise_for_status()
-    return response.json()
+    # Prefer PUT with {"asset": {...}} wrapper per LM API; fallback to PATCH for compatibility
+    try:
+        response = requests.put(url, headers=headers, json={"asset": updates}, timeout=60)
+        response.raise_for_status()
+        return response.json()
+    except requests.HTTPError as err:  # type: ignore[name-defined]
+        # Fallback to PATCH if PUT is not supported in the current API version
+        if getattr(err.response, "status_code", None) in {404, 405, 415}:  # noqa: PLR2004
+            resp2 = requests.patch(url, headers=headers, json=updates, timeout=60)
+            resp2.raise_for_status()
+            return resp2.json()
+        raise
 
 

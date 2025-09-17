@@ -25,16 +25,20 @@ def main() -> int:
         print("No assets returned.")
         return 0
 
-    # Print compact table: id | type_name | name
-    print("id,type_name,name")
+    # Print compact table: id | type_name | name | balance | balance_as_of | institution_name | subtype
+    print("id,type_name,name,balance,balance_as_of,institution_name,subtype")
     for a in assets:
         aid = a.get("id")
         name = a.get("name") or a.get("display_name") or ""
         type_name = a.get("type_name") or a.get("type") or ""
+        balance = a.get("balance")
+        balance_as_of = a.get("balance_as_of") or a.get("balance_update") or ""
+        institution_name = a.get("institution_name") or a.get("display_institution") or ""
+        subtype = a.get("subtype") or ""
         try:
-            print(f"{int(aid)},{type_name},{name}")
+            print(f"{int(aid)},{type_name},{name},{balance},{balance_as_of},{institution_name},{subtype}")
         except Exception:
-            print(f"{aid},{type_name},{name}")
+            print(f"{aid},{type_name},{name},{balance},{balance_as_of},{institution_name},{subtype}")
 
     return 0
 
