@@ -10,14 +10,13 @@ from lunchmoney import create_transactions
 
 
 def build_txn(date: str, amount: float, note: str, asset_id: int) -> Dict[str, Any]:
-    # Lunch Money expects expenses as positive and income as negative.
-    # Interest is income, so send a negative amount. Use absolute value for idempotency key.
+    # Post interest as positive amount per user's preference. Keep idempotency sign-agnostic.
     abs_amount = abs(float(amount))
     pence = int(round(abs_amount * 100))
     ext = f"monzo_pot_interest:{date[:7]}:{pence}"
     return {
         "date": date,
-        "amount": -abs_amount,
+        "amount": abs_amount,
         "payee": "Monzo Savings Interest",
         "notes": note or "Monzo Savings Interest",
         "asset_id": asset_id,
