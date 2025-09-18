@@ -1,10 +1,12 @@
 # Monzo → Lunch Money Sync
 
-Local Python script that syncs recent Monzo transactions into Lunch Money.
+Local Python script that syncs your Monzo transactions into Lunch Money. Everything stays on your machine. No cloud servers to configure or worries about leaking API keys.
+Designed to be run via a daily cron job (or hourly, weekly, whatever you prefer) 
+When the script first runs it fetches historical transactions to sync. Then only fetches recent/new transactions on future runs.
 
-## Prereqs
+## Requirements
 
-- Python 3.9+ recommended
+- Python 3.9+
 - A Monzo OAuth2 client (client id/secret)
 - A Lunch Money Personal Access Token
 
@@ -23,8 +25,10 @@ Create a `.env` file in the repo root with:
 MONZO_CLIENT_ID=...
 MONZO_CLIENT_SECRET=...
 MONZO_ACCOUNT_IDS=acc_...,acc_...
+
 LUNCHMONEY_ACCESS_TOKEN=...
 LM_ASSET_IDS_MAP=acc_...:1234,acc_...:5678
+
 # Optional:
 LM_CATEGORY_BANK_TRANSFER_ID=123456
 MONZO_SAVINGS_POT_ID=pot_000...
@@ -33,7 +37,12 @@ MONZO_ACCOUNT_LABELS=acc_...:personal,acc_...:joint
 DRY_RUN=true
 ```
 
-Notes:
+### Getting credentials
+
+Get your Monzo client ID and secret by creating a new client app in the [Monzo Developers](https://developers.monzo.com/) portal
+Get your Lunchmoney access token here
+
+### Notes:
 
 - `MONZO_ACCOUNT_IDS` should include your account ids (personal, joint), comma-separated.
 - Internal movements and Pot transfers are included and categorized as Bank Transfers when `LM_CATEGORY_BANK_TRANSFER_ID` is set.
@@ -58,7 +67,7 @@ Dry-run (fetch/transform only, no POSTs):
 source .venv/bin/activate && DRY_RUN=1 python sync.py | cat
 ```
 
-Notes:
+### Notes:
 
 - On first run, the script opens the browser for Monzo OAuth; tokens are stored in the system keychain. No tokens are written to .env.
 - `| cat` forces full stdout passthrough in some terminals/loggers.
@@ -149,7 +158,7 @@ Example `category_map.json`:
 }
 ```
 
-Notes:
+### Notes:
 
 - Monzo category keys are lower-case like `groceries`, `eating_out`, `transport`, etc.
 - Values can be either a numeric Lunch Money `category_id` or the exact Lunch Money category name (with or without emoji). Names are normalized (emoji stripped, case/whitespace-insensitive) and resolved via the Lunch Money API.
