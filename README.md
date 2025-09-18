@@ -172,7 +172,7 @@ crontab -e
 2. Add this line to run daily at 8am (replace `/path/to/monzo-lunchmoney-sync` with your actual folder path):
 
 ```bash
-0 8 * * * cd /path/to/monzo-lunchmoney-sync && /path/to/monzo-lunchmoney-sync/.venv/bin/python sync.py >> sync.log 2>&1
+0 8 * * * cd /path/to/monzo-lunchmoney-sync && CRON=1 /path/to/monzo-lunchmoney-sync/.venv/bin/python sync.py >> sync.log 2>&1
 ```
 
 3. Save and exit (in nano: Ctrl+X, then Y, then Enter)
@@ -182,6 +182,8 @@ This will run the sync every day at 8am and save any output to `sync.log`. You c
 ```bash
 tail -f sync.log
 ```
+
+**Important**: The `CRON=1` environment variable tells the script it's running in a non-interactive environment. This prevents OAuth authentication failures that can occur when the script tries to open a browser during automated runs.
 
 ## Where your data is stored
 
@@ -222,6 +224,23 @@ Included a script to sync monthly interest payments you earn from Monzo savings 
 - **No secrets in logs**: Only transaction counts and timestamps are logged
 - **Duplicate protection**: Won't create duplicate transactions if you run it multiple times
 - **Test mode**: Always test with `DRY_RUN=1` before running for real
+
+## Troubleshooting
+
+### Authentication issues
+
+If you see "Authentication failed" errors in your logs:
+
+1. **First time setup**: Make sure you've completed the initial OAuth flow by running the script manually at least once
+2. **Token refresh failures**: The script will automatically try to refresh expired tokens
+3. **Cron environment**: Make sure you're using `CRON=1` in your cron job to prevent browser-based OAuth attempts
+4. **Manual re-authentication**: If tokens are completely invalid, delete them from your keychain and run the script manually to re-authenticate
+
+### Common issues
+
+- **"No stored tokens found"**: Run the script manually first to complete the OAuth flow
+- **"Invalid state" errors**: Usually indicates the OAuth flow was interrupted; try running manually
+- **Network timeouts**: The script will retry, but persistent network issues may require manual intervention
 
 ## Automatic category assignment
 

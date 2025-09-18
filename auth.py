@@ -25,7 +25,7 @@ load_dotenv()
 # Constants
 MONZO_AUTH_URL = "https://auth.monzo.com"
 MONZO_TOKEN_URL = "https://api.monzo.com/oauth2/token"
-REDIRECT_PORT = 8080  # Using standard port for better compatibility
+REDIRECT_PORT = 8080
 REDIRECT_URI = f"http://localhost:{REDIRECT_PORT}/callback"
 
 # Keyring service name for storing tokens
@@ -238,8 +238,8 @@ def ensure_valid_auth() -> str:
         response = requests.get("https://api.monzo.com/ping/whoami", headers=headers, timeout=30)
         if response.status_code == 200:
             return access_token
-    except:
-        pass
+    except Exception as e:
+        print(f"Access token test failed: {e}")
     
     # Access token expired, try refresh
     print("Access token expired. Refreshing...")
@@ -247,8 +247,14 @@ def ensure_valid_auth() -> str:
         access_token, refresh_token = refresh_access_token(refresh_token)
         store_tokens(access_token, refresh_token)
         return access_token
-    except AuthenticationError:
-        # Refresh failed, start new OAuth flow
+    except AuthenticationError as e:
+        # Refresh failed, check if we're in a non-interactive environment
+        import os
+        if not os.isatty(0) or os.getenv('CRON') or os.getenv('CI'):
+            # In non-interactive environment (cron, CI), don't start OAuth flow
+            raise AuthenticationError(f"Token refresh failed in non-interactive environment: {e}")
+        
+        # Refresh failed, start new OAuth flow (only in interactive environments)
         print("Token refresh failed. Starting new OAuth flow...")
         access_token, refresh_token = start_auth_flow()
         store_tokens(access_token, refresh_token)
