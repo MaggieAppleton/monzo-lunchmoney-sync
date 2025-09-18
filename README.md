@@ -1,25 +1,27 @@
 # Monzo → Lunch Money Sync
 
-Local Python script that syncs your Monzo transactions into Lunch Money. Everything stays on your machine. No cloud servers to configure or worries about leaking API keys.
-Designed to be run via a daily cron job (or hourly, weekly, whatever you prefer) 
-When the script first runs it fetches historical transactions to sync. Then only fetches recent/new transactions on future runs.
+A local Python script that syncs your Monzo bank transactions into Lunch Money. Everything runs on your computer - no cloud services to set up.
+
+The first time you run it, it fetches all your past Monzo transactions and saves them to a local 'snapshot'. You can sync this to Lunch Money to backfill historical transactions. After that, it only fetches new ones since the last time it ran.
 
 ## Requirements
 
 - Python 3.9+
-- A Monzo OAuth2 client (client id/secret)
-- A Lunch Money Personal Access Token
+- A Monzo developer account + client app
+- A Lunch Money API key
 
-## Install
+## Setup
+
+Create a virtual environment (this keeps the script's dependencies separate from your system):
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Configure
+## Configuration
 
-Create a `.env` file in the repo root with:
+Create a file called `.env` in the main folder with your account details:
 
 ```bash
 MONZO_CLIENT_ID=...
@@ -37,115 +39,193 @@ MONZO_ACCOUNT_LABELS=acc_...:personal,acc_...:joint
 DRY_RUN=true
 ```
 
-### Getting credentials
+### Getting your Monzo API keys
 
-Get your Monzo client ID and secret by creating a new client app in the [Monzo Developers](https://developers.monzo.com/) portal
-Get your Lunchmoney access token here
+1. Go to the [Monzo Developers](https://developers.monzo.com/) website
+2. Create a new app to get your API keys
 
-### Notes:
+![Make a new client app](/images/monzo1.png)
 
-- `MONZO_ACCOUNT_IDS` should include your account ids (personal, joint), comma-separated.
-- Internal movements and Pot transfers are included and categorized as Bank Transfers when `LM_CATEGORY_BANK_TRANSFER_ID` is set.
-- If you want to treat a Monzo pot as a separate Lunch Money account, set `MONZO_SAVINGS_POT_ID` and `LM_SAVINGS_ASSET_ID` to mirror those transfers.
-- `LM_ASSET_IDS_MAP` must include a mapping for every `account_id` in `MONZO_ACCOUNT_IDS`; the script exits if any are missing.
-- Only finalized (settled) and not-declined transactions are synced.
-- `category_map.json` is read from `data/category_map.json` if present (preferred). A legacy `category_map.json` in the repo root is also supported.
+3. Fill in the form:
+   - Give your app a name and description
+   - Leave the logo URL blank
+   - Set the redirect URL to: `http://localhost:8080/callback`
+   - Set confidentiality to "Confidential"
 
-## Run
+![How to fill in the client app form](/images/monzo2.png)
 
-### Recommended (activate venv and run)
+### Getting your Lunch Money API key
 
-Live run with stdout passthrough:
+1. Log into Lunch Money
+2. Go to Settings > Developers
+3. Click "Request new access token"
 
-```bash
-source .venv/bin/activate && python sync.py | cat
-```
+![How to get an API key within Lunch Money](/images/lunchmoney.png)
 
-Dry-run (fetch/transform only, no POSTs):
+4. Copy the token and add it to your `.env` file
 
-```bash
-source .venv/bin/activate && DRY_RUN=1 python sync.py | cat
-```
+### Important notes:
 
-### Notes:
+- **Account IDs**: List all your Monzo accounts (personal, joint, etc.) separated by commas
+- **Asset mapping**: You must tell the script which Lunch Money account each Monzo account should sync to
+- **Bank transfers**: Money moves between your own accounts are marked as "Bank Transfer" if you set that category
+- **Savings pots**: You can treat Monzo savings pots as separate Lunch Money accounts
+- **Only real transactions**: The script only syncs completed transactions (not pending ones)
+- **Category mapping**: You can create a file to automatically assign categories to your transactions
 
-- On first run, the script opens the browser for Monzo OAuth; tokens are stored in the system keychain. No tokens are written to .env.
-- `| cat` forces full stdout passthrough in some terminals/loggers.
-- When the venv is active, `python` resolves to the virtualenv interpreter.
+## Running the script
 
-### Alternatives
-
-If you prefer not to use a one-liner, you can run:
+### Activate your virtual environment
 
 ```bash
 source .venv/bin/activate
+```
+
+### Test run (recommended first)
+
+Before syncing for real, do a test run to see what would happen:
+
+```bash
+DRY_RUN=1 python sync.py
+```
+
+This shows you what transactions would be sent to Lunch Money without actually sending them.
+
+### Real sync
+
+Once you're happy with the test run:
+
+```bash
 python sync.py
 ```
 
-Output includes per-account counts and overall totals. On success, the newest Monzo `created` timestamp per account is saved to `data/last_sync.json`.
+### What happens when you run it:
 
-### Temporary backfill window (testing)
+- **First time**: Your browser opens for Monzo login. Login via email, then open the Monzo app to approve access
+- **Security**: Your login tokens are stored in your computer's keychain (not in files)
+- **Tracking**: The script remembers where it left off so it only gets new transactions next time
+- **Output**: You'll see a summary of how many transactions were synced
 
-To fetch a larger window for a one-off run (e.g., 14 or 30 days) without changing saved state:
+### Syncing more history
+
+To grab more past transactions (like the last 14 or 30 days) for one run:
 
 ```bash
-source .venv/bin/activate && LM_OVERRIDE_SINCE_DAYS=14 python sync.py | cat
+LM_OVERRIDE_SINCE_DAYS=14 python sync.py
 ```
 
-Omit `LM_OVERRIDE_SINCE_DAYS` afterwards to resume normal incremental syncing from `last_sync.json`.
+After this runs, it will remember the newest transaction and go back to normal syncing. Don't use this setting for regular runs.
 
-## Cron (macOS)
+### Syncing specific date ranges
 
-Edit crontab:
+To sync transactions from specific dates:
+
+```bash
+python sync.py --since 2024-01-01 --before 2024-02-01
+```
+
+- `--since`: Start date (inclusive)
+- `--before`: End date (exclusive - so 2024-02-01 means up to but not including Feb 1st)
+- If you don't specify `--before`, it syncs up to today
+
+## Advanced: Using snapshots for large backfills
+
+For syncing lots of old transactions, you can save them to a file first, then sync from that file. This is useful for big backfills or if you want to review the data first.
+
+### Step 1: Create a snapshot
+
+```bash
+python snapshot_transactions.py --start 2023-01-01 --end 2024-12-31
+```
+
+This saves all transactions from that period to a file in the `data/` folder.
+
+### Step 2: Sync from the snapshot
+
+Test first:
+
+```bash
+DRY_RUN=1 python sync_from_snapshot.py --month 2024-08
+```
+
+Then for real:
+
+```bash
+python sync_from_snapshot.py --month 2024-08
+```
+
+- Use `--month` to sync just one month, or leave it out to sync everything in the snapshot
+- You still need your `LM_ASSET_IDS_MAP` set up
+
+## Setting up automatic syncing
+
+You can make the script run automatically every day (or however often you want).
+
+### On Mac:
+
+1. Open Terminal and type:
 
 ```bash
 crontab -e
 ```
 
-Example entry to run daily at 8am, logging to `sync.log` in the repo:
+2. Add this line to run daily at 8am (replace `/path/to/monzo-lunchmoney-sync` with your actual folder path):
 
 ```bash
-0 8 * * * cd /Users/helios/Github/monzo-lunchmoney-sync && /usr/bin/python3 sync.py >> sync.log 2>&1
+0 8 * * * cd /path/to/monzo-lunchmoney-sync && /path/to/monzo-lunchmoney-sync/.venv/bin/python sync.py >> sync.log 2>&1
 ```
 
-Tip: keep your `.env` in the repo root; `python-dotenv` loads it automatically.
+3. Save and exit (in nano: Ctrl+X, then Y, then Enter)
 
-## How it works (high level)
+This will run the sync every day at 8am and save any output to `sync.log`. You can check the log with:
 
-1. Obtain/refresh a Monzo access token via OAuth; tokens are stored in the system keychain.
-2. For each `account_id` in `MONZO_ACCOUNT_IDS`, fetch transactions since that account’s `last_sync`.
-3. Transform to Lunch Money format; detect internal/Pot transfers and assign the Bank Transfers category.
-4. POST batch to Lunch Money at `https://api.lunchmoney.app/v1/transactions` with `external_id` for idempotency.
-5. Update `last_sync.json` with the newest `created` timestamp per account.
+```bash
+tail -f sync.log
+```
 
-## Savings pot mirroring
+## Where your data is stored
 
-Monzo “savings” are usually Pots attached to your personal current account (not separate accounts). To mirror movement into/out of a specific savings pot into its own Lunch Money account:
+- **`data/` folder**: Created automatically, contains:
+  - `last_sync.json` - remembers where the script left off
+  - `monzo_snapshot_*.json` - any snapshots you create
+  - `category_map.json` - your custom category mappings (optional)
+  - `interest.json` - interest sync data (optional)
+- **Privacy**: The `data/` folder and `.env` file are ignored by Git (not uploaded anywhere)
+- **Security**: Your login tokens are stored in your computer's secure keychain, not in files
 
-1. Find your pot id (`pot_id`):
-   - In some Monzo transaction payloads (scheme `uk_retail_pot`), `metadata.pot_id` is present.
-   - Alternatively, use the Monzo API to list pots and copy the id.
-2. Set these in `.env`:
+## Syncing Monzo savings pots
+
+Monzo savings are usually "pots" attached to your main account. You can treat them as separate accounts in Lunch Money.
+
+### Setup:
+
+1. Find your pot ID (look in Monzo transaction details or use the Monzo API)
+2. Add these to your `.env` file:
 
 ```bash
 MONZO_SAVINGS_POT_ID=pot_0000000000000000000000
 LM_SAVINGS_ASSET_ID=9012
 ```
 
-Behavior:
+### What happens:
 
-- For any transaction identified as a transfer to/from that pot, we add a mirrored transaction into the `LM_SAVINGS_ASSET_ID` with the same date/amount and mark it as a Bank Transfer (if `LM_CATEGORY_BANK_TRANSFER_ID` is set).
-- Mirrors use a distinct `external_id` suffix (`:mirror_savings`) for idempotency.
+- When money moves to/from your savings pot, it creates matching transactions in both your main account and the savings account in Lunch Money
+- These are marked as "Bank Transfer" if you set that category
+- The script prevents duplicates by using special IDs
 
-## Safety
+## Bonus: Interest tracking
 
-- No sensitive values are logged. Logs show counts and timestamps only.
-- Idempotency via `external_id` avoids duplicates on retries.
-- `DRY_RUN` helps validate setup before live posting.
+Included a script to sync monthly interest payments you earn from Monzo savings pots. These aren't exposed in the API so you have you manually add them to a local json file to sync them. You can then use `sync_interest.py` to sync the interest payments to Lunch Money.
 
-## Category mapping (Monzo → Lunch Money)
+## Safety features
 
-Optionally create a `category_map.json` in the repo root to map Monzo transaction categories to Lunch Money categories. When present, non-transfer transactions will use this mapping to set `category_id`.
+- **No secrets in logs**: Only transaction counts and timestamps are logged
+- **Duplicate protection**: Won't create duplicate transactions if you run it multiple times
+- **Test mode**: Always test with `DRY_RUN=1` before running for real
+
+## Automatic category assignment
+
+You can create a `category_map.json` file to automatically assign categories to your transactions based on how Monzo categorizes them.
 
 Example `category_map.json`:
 
@@ -158,9 +238,9 @@ Example `category_map.json`:
 }
 ```
 
-### Notes:
+### How it works:
 
-- Monzo category keys are lower-case like `groceries`, `eating_out`, `transport`, etc.
-- Values can be either a numeric Lunch Money `category_id` or the exact Lunch Money category name (with or without emoji). Names are normalized (emoji stripped, case/whitespace-insensitive) and resolved via the Lunch Money API.
-- Internal transfers and pot transfers still use `LM_CATEGORY_BANK_TRANSFER_ID` when set, regardless of the map.
-- If a Monzo category isn’t present in the map, the transaction is left uncategorized in Lunch Money.
+- **Monzo categories**: Use lowercase names like `groceries`, `eating_out`, `transport`
+- **Lunch Money categories**: You can use either the category ID number or the exact category name (with or without emoji)
+- **Transfers**: Money moves between your own accounts still use the "Bank Transfer" category if you set it
+- **Missing categories**: If a Monzo category isn't in your map, the transaction stays uncategorized
