@@ -387,7 +387,16 @@ def main() -> int:
     # Optionally sync a specific Monzo pot's balance to a separate LM asset
     if savings_pot_id and lm_savings_asset_id:
         try:
-            pots = list_pots(access_token)
+            # Monzo pots API requires a current_account_id parameter
+            # Use the first account ID from the configured accounts
+            account_ids = os.getenv('MONZO_ACCOUNT_IDS', '').split(',')
+            current_account_id = account_ids[0].strip() if account_ids and account_ids[0] else None
+            
+            if not current_account_id:
+                print("Warning: No account ID available for pots API call")
+                return 0
+                
+            pots = list_pots(access_token, current_account_id)
             target = None
             for p in pots:
                 if str(p.get("id")) == str(savings_pot_id):
