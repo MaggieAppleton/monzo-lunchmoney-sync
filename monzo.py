@@ -1,3 +1,22 @@
+"""
+Monzo API client for account and transaction management.
+
+This module provides functions to interact with the Monzo API for:
+- Fetching transactions from Monzo accounts
+- Listing accounts and pots
+- Getting account balances
+- Handling OAuth authentication and token management
+
+The module includes custom exception handling for verification requirements
+and provides comprehensive error handling for API interactions.
+
+Key features:
+- OAuth token management through auth module
+- Transaction filtering (settled, non-declined only)
+- Support for multiple account types (current accounts, pots)
+- Balance fetching with currency conversion
+- Verification requirement detection and handling
+"""
 import os
 import requests
 from typing import Dict, List, Optional

@@ -1,3 +1,25 @@
+"""
+Main sync script for Monzo to Lunch Money integration.
+
+This is the primary script for syncing Monzo transactions to Lunch Money.
+It handles the complete sync process including transaction fetching,
+transformation, category mapping, internal transfer mirroring, and
+balance updates.
+
+Key features:
+- Incremental syncing based on last sync timestamps
+- Automatic category mapping from Monzo to Lunch Money
+- Internal transfer detection and mirroring
+- Savings pot balance syncing
+- Dry-run mode for testing
+- Comprehensive error handling and validation
+
+Usage:
+    python sync.py [--since YYYY-MM-DD] [--before YYYY-MM-DD]
+
+The script requires extensive configuration via environment variables
+for account mappings, category mappings, and API tokens.
+"""
 import os
 import json
 import sys
@@ -34,8 +56,14 @@ def _normalize_category_name(name: str) -> str:
 
 
 def _parse_since_date_to_iso(start_date: str) -> str:
-    """Convert YYYY-MM-DD to ISO8601 at UTC midnight with Z suffix.
-
+    """Convert YYYY-MM-DD date string to ISO8601 timestamp for Monzo API.
+    
+    Args:
+        start_date: Date string in YYYY-MM-DD format
+        
+    Returns:
+        ISO8601 timestamp string with Z suffix for UTC
+        
     Example: "2025-01-01" -> "2025-01-01T00:00:00Z"
     """
     dt = datetime.strptime(start_date, "%Y-%m-%d").replace(
@@ -45,6 +73,15 @@ def _parse_since_date_to_iso(start_date: str) -> str:
 
 
 def main() -> int:
+    """Main function to sync Monzo transactions to Lunch Money.
+    
+    Handles the complete sync process including configuration validation,
+    transaction fetching, transformation, category mapping, and balance updates.
+    Supports dry-run mode and date range overrides.
+    
+    Returns:
+        int: Exit code (0 for success, 1 for configuration error, 2 for date error)
+    """
     load_dotenv()
     dry_run = os.getenv("DRY_RUN", "").strip().lower() in {"1", "true", "yes", "on", "y"}
 

@@ -1,7 +1,32 @@
+"""
+Transaction transformation utilities for Monzo to Lunch Money conversion.
+
+This module provides functions to transform Monzo transaction data into
+Lunch Money format, including category mapping, internal transfer detection,
+and savings pot mirroring. It handles the core business logic for converting
+between the two systems' data formats.
+
+Key features:
+- Monzo to Lunch Money transaction format conversion
+- Internal transfer and pot transfer detection
+- Category mapping application
+- Savings pot transaction mirroring
+- Idempotent external_id generation
+- Batch processing with comprehensive transformation
+"""
 from typing import Dict, List, Optional, Set
 from datetime import datetime, timezone
 
 def _is_internal_or_pot_transfer(txn: Dict, monzo_account_ids: Set[str]) -> bool:
+    """Determine if a transaction is an internal transfer or pot transfer.
+    
+    Args:
+        txn: Monzo transaction dictionary
+        monzo_account_ids: Set of known Monzo account IDs
+        
+    Returns:
+        True if the transaction is an internal transfer or pot transfer
+    """
     counterparty = txn.get("counterparty") or {}
     metadata = txn.get("metadata") or {}
     description = (txn.get("description") or "").lower()
@@ -32,6 +57,20 @@ def transform_monzo_to_lunchmoney(
     lm_savings_asset_id: Optional[int] = None,
     flip_sign: bool = False,
 ) -> Dict:
+    """Transform a single Monzo transaction to Lunch Money format.
+    
+    Args:
+        txn: Monzo transaction dictionary
+        bank_transfer_category_id: Lunch Money category ID for bank transfers
+        monzo_account_ids: Set of known Monzo account IDs for internal transfer detection
+        category_map: Optional mapping from Monzo categories to Lunch Money category IDs
+        savings_pot_id: Optional Monzo savings pot ID for pot transfer detection
+        lm_savings_asset_id: Optional Lunch Money asset ID for savings account
+        flip_sign: Whether to flip the transaction amount sign
+        
+    Returns:
+        Dictionary representing a Lunch Money transaction
+    """
     # Date (prefer created, fallback to settled, then today)
     created_or_settled = txn.get("created") or txn.get("settled") or ""
     date_value = created_or_settled[:10] if created_or_settled else datetime.now(timezone.utc).date().isoformat()
@@ -109,6 +148,24 @@ def batch_transform(
     lm_savings_asset_id: Optional[int] = None,
     flip_sign: bool = False,
 ) -> List[Dict]:
+    """Transform a batch of Monzo transactions to Lunch Money format.
+    
+    Processes multiple transactions and optionally creates mirrored entries
+    for savings pot transfers. This is the main entry point for transaction
+    transformation in the sync process.
+    
+    Args:
+        txns: List of Monzo transaction dictionaries
+        bank_transfer_category_id: Lunch Money category ID for bank transfers
+        monzo_account_ids: Set of known Monzo account IDs for internal transfer detection
+        category_map: Optional mapping from Monzo categories to Lunch Money category IDs
+        savings_pot_id: Optional Monzo savings pot ID for pot transfer detection
+        lm_savings_asset_id: Optional Lunch Money asset ID for savings account
+        flip_sign: Whether to flip the transaction amount sign
+        
+    Returns:
+        List of dictionaries representing Lunch Money transactions
+    """
     out: List[Dict] = []
     for t in txns:
         base = transform_monzo_to_lunchmoney(

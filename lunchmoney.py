@@ -1,3 +1,21 @@
+"""
+Lunch Money API client for transaction and account management.
+
+This module provides functions to interact with the Lunch Money API for:
+- Creating and listing transactions
+- Managing categories and assets (accounts)
+- Updating transaction and asset information
+
+All functions require the LUNCHMONEY_ACCESS_TOKEN environment variable to be set.
+The module handles authentication, request formatting, and error handling for
+Lunch Money API interactions.
+
+Key features:
+- Idempotent transaction creation using external_id
+- Support for category and asset management
+- Automatic rule application for new transactions
+- Comprehensive error handling and validation
+"""
 import os
 from typing import Dict, List
 import requests

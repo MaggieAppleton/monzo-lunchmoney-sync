@@ -1,3 +1,25 @@
+"""
+Report Monzo transaction categories to help build category mapping.
+
+This script analyzes Monzo transactions to identify unique categories used
+and optionally displays Lunch Money categories for mapping purposes. It's
+designed to help users create the category_map.json file needed for
+automatic category assignment during sync.
+
+Usage:
+    python report_categories.py [--days N] [--accounts "id1,id2"] [--list-lm]
+
+The script can scan a configurable time window and account set, then
+outputs category usage statistics and optionally lists available
+Lunch Money categories for reference.
+
+Key features:
+- Configurable time window (default 90 days)
+- Support for multiple Monzo accounts
+- Category usage frequency reporting
+- Optional Lunch Money category listing
+- Account discovery and validation
+"""
 import argparse
 import os
 from collections import Counter
@@ -9,6 +31,14 @@ from lunchmoney import list_categories
 
 
 def iso_since_days(days: int) -> str:
+    """Convert days ago to ISO8601 timestamp for Monzo API.
+    
+    Args:
+        days: Number of days to look back from now
+        
+    Returns:
+        ISO8601 timestamp string in UTC with Z suffix
+    """
     now = datetime.now(timezone.utc)
     start = now - timedelta(days=max(0, int(days)))
     # Monzo expects ISO8601; include time and Z for UTC
@@ -20,6 +50,16 @@ def iso_since_days(days: int) -> str:
 def aggregate_monzo_categories(
     access_token: str, account_ids: List[str], since_iso: str
 ) -> Tuple[Counter, int]:
+    """Aggregate category usage across multiple Monzo accounts.
+    
+    Args:
+        access_token: Valid Monzo API access token
+        account_ids: List of Monzo account IDs to scan
+        since_iso: ISO8601 timestamp for start of scan window
+        
+    Returns:
+        Tuple of (category_counter, total_transaction_count)
+    """
     counts: Counter = Counter()
     total = 0
     for account_id in account_ids:
@@ -36,6 +76,12 @@ def aggregate_monzo_categories(
 
 
 def print_lm_categories() -> None:
+    """Print available Lunch Money categories with their IDs and group information.
+    
+    Fetches categories from Lunch Money API and displays them in a formatted
+    list showing ID, group name, and category name for easy reference when
+    building category mappings.
+    """
     try:
         payload = list_categories()
     except Exception as exc:  # noqa: BLE001
@@ -56,6 +102,14 @@ def print_lm_categories() -> None:
 
 
 def main() -> int:
+    """Main function to analyze Monzo categories and optionally list Lunch Money categories.
+    
+    Parses command line arguments, validates configuration, fetches and analyzes
+    Monzo transactions, and outputs category usage statistics.
+    
+    Returns:
+        int: Exit code (0 for success, 1 for error)
+    """
     load_dotenv()
     parser = argparse.ArgumentParser(
         description="Report unique Monzo categories to help build category_map.json",

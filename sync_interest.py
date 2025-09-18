@@ -1,4 +1,22 @@
 #!/usr/bin/env python3
+"""
+Sync Monzo savings interest to Lunch Money.
+
+This script reads interest data from a JSON file and creates corresponding
+transactions in Lunch Money. It's designed to handle savings interest that
+may not be captured through normal transaction syncing.
+
+The script expects interest data in data/interest.json (or legacy interest.json
+in the repo root) with entries containing date, amount, and optional note fields.
+It creates idempotent transactions using external_id to prevent duplicates.
+
+Usage:
+    python sync_interest.py
+
+Environment variables:
+    LM_SAVINGS_ASSET_ID: Lunch Money asset ID for the savings account
+    DRY_RUN: Set to 'true' to preview transactions without creating them
+"""
 import os
 import sys
 import json
@@ -8,6 +26,17 @@ from lunchmoney import create_transactions
 
 
 def build_txn(date: str, amount: float, note: str, asset_id: int) -> Dict[str, Any]:
+    """Build a Lunch Money transaction object for interest payment.
+    
+    Args:
+        date: Transaction date in YYYY-MM-DD format
+        amount: Interest amount (will be converted to positive)
+        note: Optional note text
+        asset_id: Lunch Money asset ID for the savings account
+        
+    Returns:
+        Dictionary representing a Lunch Money transaction
+    """
     # Post interest as positive amount per user's preference. Keep idempotency sign-agnostic.
     abs_amount = abs(float(amount))
     pence = int(round(abs_amount * 100))
@@ -25,6 +54,14 @@ def build_txn(date: str, amount: float, note: str, asset_id: int) -> Dict[str, A
 
 
 def main() -> int:
+    """Main function to sync interest payments to Lunch Money.
+    
+    Reads interest data from JSON file, validates configuration,
+    and creates transactions in Lunch Money with dry-run support.
+    
+    Returns:
+        int: Exit code (0 for success, 1 for error)
+    """
     load_dotenv()
 
     savings_asset_env = os.getenv("LM_SAVINGS_ASSET_ID")
