@@ -214,7 +214,7 @@ def ensure_valid_auth() -> str:
     
     This will:
     1. Check for stored tokens
-    2. If none found, start OAuth flow
+    2. If none found, start OAuth flow (only in interactive environments)
     3. If found but access token expired, refresh it
     4. Store new tokens if generated
     
@@ -224,9 +224,16 @@ def ensure_valid_auth() -> str:
     Raises:
         AuthenticationError: If authentication fails
     """
+    import os
+    
+    # Check if we're in a non-interactive environment early
+    is_non_interactive = not os.isatty(0) or os.getenv('CRON') or os.getenv('CI')
+    
     access_token, refresh_token = get_stored_tokens()
     
     if not access_token or not refresh_token:
+        if is_non_interactive:
+            raise AuthenticationError("No stored tokens found in non-interactive environment. Please run the script interactively first to authenticate.")
         print("No stored tokens found. Starting OAuth flow...")
         access_token, refresh_token = start_auth_flow()
         store_tokens(access_token, refresh_token)
@@ -249,8 +256,7 @@ def ensure_valid_auth() -> str:
         return access_token
     except AuthenticationError as e:
         # Refresh failed, check if we're in a non-interactive environment
-        import os
-        if not os.isatty(0) or os.getenv('CRON') or os.getenv('CI'):
+        if is_non_interactive:
             # In non-interactive environment (cron, CI), don't start OAuth flow
             raise AuthenticationError(f"Token refresh failed in non-interactive environment: {e}")
         
