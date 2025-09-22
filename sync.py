@@ -25,7 +25,7 @@ import json
 import sys
 import unicodedata
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List
 from dotenv import load_dotenv
 from monzo import fetch_transactions, fetch_account_balance, list_pots
@@ -296,13 +296,9 @@ def main() -> int:
         if before_override_iso:
             end_date = before_override_iso[:10]
         else:
-            # If we fetched any Monzo txns, use their newest created date as end
-            end_date = ""
-            if txns:
-                newest_created = max(t.get("created", "") for t in txns)
-                end_date = newest_created[:10] if newest_created else ""
-            if not end_date:
-                end_date = datetime.now(timezone.utc).date().isoformat()
+            # Always use today as the end date to ensure we catch all existing transactions
+            # This prevents issues when start_date == end_date which can miss existing transactions
+            end_date = datetime.now(timezone.utc).date().isoformat()
 
         existing_ids: set[str] = set()
         try:
@@ -367,10 +363,15 @@ def main() -> int:
         print(f"{account_id}: posted {created}/{len(lm_txns)} transactions since {since}")
 
         # Update last_sync to newest created timestamp we attempted to send
+        # Add 1 second to avoid re-fetching the same transaction (Monzo API since is inclusive)
         if txns:
             newest_created = max(t.get("created", "") for t in txns)
             if newest_created:
-                write_last_sync({account_id: str(newest_created)})
+                # Parse the timestamp and add 1 second to make the next sync exclusive
+                newest_dt = datetime.fromisoformat(newest_created.replace('Z', '+00:00'))
+                next_sync_dt = newest_dt + timedelta(seconds=1)
+                next_sync_iso = next_sync_dt.isoformat().replace('+00:00', 'Z')
+                write_last_sync({account_id: str(next_sync_iso)})
 
         # After posting transactions, sync LM asset balance with Monzo current balance
         try:
